@@ -34,6 +34,8 @@ class VimOverleafInstance:
 		options = Options()
 		options.add_argument("user-data-dir=" + self.userdata_dir)
 		options.add_argument("disable-popup-blocking")
+		options.add_experimental_option("excludeSwitches", ["enable-automation"])  # https://stackoverflow.com/a/57384517/5267751
+		options.add_experimental_option("useAutomationExtension", False)
 
 		from selenium.webdriver import Chrome  # type: ignore
 		self.driver=Chrome(options=options, executable_path=self.driver_path)
@@ -98,8 +100,12 @@ class VimOverleafInstance:
 					return
 				try:
 					self.on_timer_callback()
-				except WebDriverException:  # e.g. the browser is closed by the user
+				except WebDriverException as e:  # e.g. the browser is closed by the user
+					import traceback
+					print("Overleaf client error:")
+					traceback.print_exc(file=sys.stdout)
 					self.disconnect()
+					self.thread=None
 					return
 			time.sleep(self.updatetime)
 

@@ -1,6 +1,10 @@
 # vim-overleaf
 Edit Overleaf document from vim, with synchronization features.
 
+Here is an animation showing the plugin features:
+
+![Animation](https://user-images.githubusercontent.com/25191436/208226637-aa27da1f-c1ce-460d-9c0c-55da604d156b.gif)
+
 ## Disclaimer
 
 Backup your data. This script was quickly written in a few hours, there's no guarantee.
@@ -9,7 +13,7 @@ There are some other features, but undocumented features may change later. (docu
 
 ## Installation
 
-Install `merge3` Python library.
+Install `merge3` and `selenium` Python library.
 
 Install the plugin as usual.
 
