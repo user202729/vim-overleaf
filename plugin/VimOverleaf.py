@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Optional
 import threading
 import time
+import sys
 
 class VimOverleafInstance:
 	def __init__(self, buffer_number: int, browser_executable: Optional[str]=None, userdata_dir: Optional[str]=None, driver_path: Optional[str]=None, updatetime: Optional[float]=None)->None:
@@ -53,21 +54,33 @@ class VimOverleafInstance:
 			return "https://overleaf.com/login"
 		return match_[1]
 
-	def on_timer_callback(self)->None:
+	def sync_content(self)->bool:
 		"""
-		this is run for every timer tick, after it finishes then the text in vim buffer and in the browser should be equal
+		after it finishes then the text in vim buffer and in the browser should be equal
 		unless something unexpected happens.
+
+		return whether the sync is successful.
 		"""
-		if self.last_text is None:
-			self.last_text=self.get_browser_text()
-			__=self.edit_vim_text(self.get_vim_text(), self.last_text)
-			return
-		vim_text=self.get_vim_text()
-		browser_text=self.get_browser_text()
-		new_text, conflict=self.three_way_merge(self.last_text, vim_text, browser_text)
-		if not self.edit_browser_text(browser_text, new_text): return
-		if not self.edit_vim_text(vim_text, new_text): return
-		self.last_text=new_text
+		from selenium.common.exceptions import WebDriverException  # type: ignore
+		try:
+			if self.last_text is None:
+				self.last_text=self.get_browser_text()
+				return self.edit_vim_text(self.get_vim_text(), self.last_text)
+			vim_text=self.get_vim_text()
+			browser_text=self.get_browser_text()
+			new_text, conflict=self.three_way_merge(self.last_text, vim_text, browser_text)
+			if not self.edit_browser_text(browser_text, new_text): return False
+			if not self.edit_vim_text(vim_text, new_text): return False
+			self.last_text=new_text
+			return True
+
+		except WebDriverException:  # e.g. the browser is closed by the user
+			import traceback
+			print("Overleaf client error:")
+			traceback.print_exc(file=sys.stdout)
+			self.disconnect()  # in the example case above then there's little point keep it connected
+			return False
+
 
 	@staticmethod
 	def three_way_merge(last_text: str, vim_text: str, browser_text: str)->tuple[str, bool]:
@@ -92,22 +105,16 @@ class VimOverleafInstance:
 		return "".join(result), conflict
 
 	def run_watcher(self)->None:
-		from selenium.common.exceptions import WebDriverException  # type: ignore
-		while True:
-			with self.lock:
-				if not self.connected:
-					self.thread=None
-					return
-				try:
-					self.on_timer_callback()
-				except WebDriverException as e:  # e.g. the browser is closed by the user
-					import traceback
-					print("Overleaf client error:")
-					traceback.print_exc(file=sys.stdout)
-					self.disconnect()
-					self.thread=None
-					return
-			time.sleep(self.updatetime)
+		try:
+			while True:
+				with self.lock:
+					if not self.connected:
+						break
+					if not self.sync_content():
+						break
+				time.sleep(self.updatetime)
+		finally:
+			self.thread=None
 
 	def get_browser_text(self)->str:
 		return self.driver.execute_script((#JavaScript
@@ -179,6 +186,7 @@ class VimOverleafInstance:
 		"""
 		equivalent to clicking the "recompile" button in the browser
 		"""
+		self.sync_content()
 		return self.driver.execute_script((#JavaScript
 			r"""
 			document.querySelector(".btn-recompile[aria-label=Recompile]:not(.dropdown-toggle)").click()
