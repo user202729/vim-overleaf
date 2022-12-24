@@ -4,6 +4,9 @@ import threading
 import time
 import sys
 
+class BufferUnloadedError(RuntimeError):
+	pass
+
 class VimOverleafInstance:
 	def __init__(self, buffer_number: int, browser_executable: Optional[str]=None, userdata_dir: Optional[str]=None, driver_path: Optional[str]=None, updatetime: Optional[float]=None)->None:
 		if browser_executable is None:
@@ -44,6 +47,8 @@ class VimOverleafInstance:
 
 	@property
 	def buffer(self):
+		if not vim.Function("bufloaded")(self.buffer_number):
+			raise BufferUnloadedError()
 		return vim.buffers[self.buffer_number]
 
 	def get_initial_url(self)->str:
@@ -81,6 +86,8 @@ class VimOverleafInstance:
 			self.disconnect()  # in the example case above then there's little point keep it connected
 			return False
 
+		except BufferUnloadedError:
+			self.disconnect()
 
 	@staticmethod
 	def three_way_merge(last_text: str, vim_text: str, browser_text: str)->tuple[str, bool]:
