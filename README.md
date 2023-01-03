@@ -28,6 +28,8 @@ You need to download Google Chrome browser and the `chromedriver` executable.
 the editor text will be overwritten with the browser text, nevertheless using the undo feature in Vim suffices.
 * Commands `:OverleafDisconnect` and `:OverleafRecompile` are available.
 
+Note that `:OverleafRecompile` is a no-operation when there's no connection.
+
 You may want to make your own key bindings.
 
 If in the file there's a line with content such as

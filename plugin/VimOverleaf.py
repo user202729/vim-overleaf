@@ -191,11 +191,13 @@ class VimOverleafInstance:
 		"""
 		equivalent to clicking the "recompile" button in the browser
 		"""
-		self.sync_content()
-		return self.driver.execute_script((#JavaScript
-			r"""
-			document.querySelector(".btn-recompile[aria-label=Recompile]:not(.dropdown-toggle)").click()
-			"""))
+		with self.lock:
+			if not self.connected: return
+			self.sync_content()
+			self.driver.execute_script((#JavaScript
+				r"""
+				document.querySelector(".btn-recompile[aria-label=Recompile]:not(.dropdown-toggle)").click()
+				"""))
 
 	@staticmethod
 	def current_buffer_number()->int:
@@ -205,8 +207,14 @@ class VimOverleafInstance:
 	objects: dict[int, VimOverleafInstance]={}  # buffer number → object
 
 	@staticmethod
-	def object_for_current_buffer()->VimOverleafInstance:
-		return VimOverleafInstance.objects[VimOverleafInstance.current_buffer_number()]
+	def object_for_current_buffer()->Optional[VimOverleafInstance]:
+		return VimOverleafInstance.objects.get(VimOverleafInstance.current_buffer_number())
+
+	@staticmethod
+	def object_for_current_buffer_force()->VimOverleafInstance:
+		o = VimOverleafInstance.object_for_current_buffer()
+		assert o is not None, "Browser is not opened for the current buffer!"
+		return o
 
 def VimOverleafOpenBrowser()->None:
 	buffer_number=VimOverleafInstance.current_buffer_number()
@@ -216,20 +224,20 @@ def VimOverleafOpenBrowser()->None:
 	VimOverleafInstance.objects[buffer_number].open_browser()
 
 def VimOverleafConnect()->None:
-	VimOverleafInstance.object_for_current_buffer().connect()
+	VimOverleafInstance.object_for_current_buffer_force().connect()
 
 def VimOverleafDisconnect()->None:
-	VimOverleafInstance.object_for_current_buffer().disconnect()
+	VimOverleafInstance.object_for_current_buffer_force().disconnect()
 
 def VimOverleafRecompile()->None:
-	VimOverleafInstance.object_for_current_buffer().recompile()
+	o = VimOverleafInstance.object_for_current_buffer()
+	if o is not None: o.recompile()
 
 def VimOverleafInternalSyncContent()->None:
 	"""
 	Internal function, do not use.
 	For simplicity this global function is simply called once in a while.
 	"""
-	n = VimOverleafInstance.current_buffer_number()
-	if n in VimOverleafInstance.objects:
-		VimOverleafInstance.objects[n].sync_content()
+	o = VimOverleafInstance.object_for_current_buffer()
+	if o is not None: o.sync_content()
 
