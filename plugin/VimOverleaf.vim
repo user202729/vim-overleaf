@@ -26,7 +26,24 @@ command! OverleafRecompile    :py3 VimOverleafRecompile()
 # (copied from Mundo)
 const plugin_path = escape(expand('<sfile>:p:h'), '\')
 
+def SyncContent(timer: number)
+	py3 VimOverleafInternalSyncContent()
+enddef
+
+if type(g:vim_overleaf_updatetime) == v:t_string
+	g:vim_overleaf_updatetime = str2float(g:vim_overleaf_updatetime)
+endif
+const updatetime_ms = float2nr(round(g:vim_overleaf_updatetime * 1000))
+if updatetime_ms == 0
+	echoerr "updatetime cannot be zero!"
+	finish
+endif
+timer_start(updatetime_ms, SyncContent, {"repeat": -1})
+
+
+
 def g:OverleafReloadPython()
 	exec 'py3file ' .. plugin_path .. '/VimOverleaf.py'
 enddef
 g:OverleafReloadPython()
+

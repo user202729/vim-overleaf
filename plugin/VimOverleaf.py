@@ -28,10 +28,10 @@ class VimOverleafInstance:
 		self.driver_path=driver_path
 		self.updatetime=updatetime
 
-		self.thread: Optional[threading.Thread]=None
 		self.last_text: Optional[str]=None
 		self.connected: bool=False
 		self.lock=threading.RLock()  # used to protect `connected` and `thread` etc. since it might be accessed from multiple threads
+		# actually not sure how vim timer works, so this is just in case
 
 	def open_browser(self)->None:
 		from selenium.webdriver.chrome.options import Options  # type: ignore
@@ -59,12 +59,14 @@ class VimOverleafInstance:
 			return "https://overleaf.com/login"
 		return match_[1]
 
-	def sync_content(self)->bool:
+	def try_sync_content(self)->bool:
 		"""
 		after it finishes then the text in vim buffer and in the browser should be equal
 		unless something unexpected happens.
 
 		return whether the sync is successful.
+
+		the caller should lock self.lock before calling this function.
 		"""
 		from selenium.common.exceptions import WebDriverException  # type: ignore
 		try:
@@ -83,11 +85,23 @@ class VimOverleafInstance:
 			import traceback
 			print("Overleaf client error:")
 			traceback.print_exc(file=sys.stdout)
-			self.disconnect()  # in the example case above then there's little point keep it connected
 			return False
 
 		except BufferUnloadedError:
+			return False
+
+	def sync_content(self)->None:
+		"""
+		same as try_sync_content, except that if it fails then it will disconnect.
+		"""
+		try:
+			with self.lock:
+				if not self.connected: return
+				if not self.try_sync_content():
+					self.disconnect()
+		except:
 			self.disconnect()
+			raise
 
 	@staticmethod
 	def three_way_merge(last_text: str, vim_text: str, browser_text: str)->tuple[str, bool]:
@@ -110,18 +124,6 @@ class VimOverleafInstance:
 				part,=rest
 				result.append(part)
 		return "".join(result), conflict
-
-	def run_watcher(self)->None:
-		try:
-			while True:
-				with self.lock:
-					if not self.connected:
-						break
-					if not self.sync_content():
-						break
-				time.sleep(self.updatetime)
-		finally:
-			self.thread=None
 
 	def get_browser_text(self)->str:
 		return self.driver.execute_script((#JavaScript
@@ -174,10 +176,6 @@ class VimOverleafInstance:
 		with self.lock:
 			assert not self.connected, "already connected"
 			self.connected=True
-			if self.thread is None:
-				self.thread=threading.Thread(target=self.run_watcher)
-				assert self.thread is not None
-				self.thread.start()
 		print("Connected.")
 
 	def disconnect(self)->None:
@@ -186,7 +184,7 @@ class VimOverleafInstance:
 			self.connected=False
 		print("Disconnected.")
 
-	def quit(self)->None:
+	def quit_browser(self)->None:
 		self.driver.quit()
 
 	def recompile(self)->None:
@@ -213,7 +211,7 @@ class VimOverleafInstance:
 def VimOverleafOpenBrowser()->None:
 	buffer_number=VimOverleafInstance.current_buffer_number()
 	if buffer_number in VimOverleafInstance.objects:
-		VimOverleafInstance.objects[buffer_number].quit()
+		VimOverleafInstance.objects[buffer_number].quit_browser()
 	VimOverleafInstance.objects[buffer_number]=VimOverleafInstance(buffer_number)
 	VimOverleafInstance.objects[buffer_number].open_browser()
 
@@ -225,3 +223,13 @@ def VimOverleafDisconnect()->None:
 
 def VimOverleafRecompile()->None:
 	VimOverleafInstance.object_for_current_buffer().recompile()
+
+def VimOverleafInternalSyncContent()->None:
+	"""
+	Internal function, do not use.
+	For simplicity this global function is simply called once in a while.
+	"""
+	n = VimOverleafInstance.current_buffer_number()
+	if n in VimOverleafInstance.objects:
+		VimOverleafInstance.objects[n].sync_content()
+

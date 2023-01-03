@@ -54,3 +54,6 @@ from three_merge import merge
 merge("zzzz", "bcde", "bcd")
 ```
 results in an infinite loop.
+
+Using Python thread and modify Vim data structures from Python's non-main thread leads to Vim internal errors.
+Trying to use Vim's `timer_start()` instead.
