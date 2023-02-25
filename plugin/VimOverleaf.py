@@ -196,7 +196,7 @@ class VimOverleafInstance:
 			self.sync_content()
 			self.driver.execute_script((#JavaScript
 				r"""
-				document.querySelector(".btn-recompile[aria-label=Recompile]:not(.dropdown-toggle)").click()
+				document.evaluate("//pdf-preview//button/*[contains(text(), 'Recompile')]", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE).singleNodeValue.click()
 				"""))
 
 	@staticmethod
